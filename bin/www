@@ -1,0 +1,204 @@
+#!/usr/bin/env node
+
+/**
+ * Module dependencies.
+ */
+
+var app = require('../app');
+var debug = require('debug')('facebookchat:server');
+var http = require('http');
+
+/**
+ * Get port from environment and store in Express.
+ */
+
+var port = normalizePort(process.env.OPENSHIFT_NODEJS_PORT || '3000');
+app.set('port', port);
+
+/**
+ * Create HTTP server.
+ */
+
+var server = http.createServer(app);
+
+/**
+ * Listen on provided port, on all network interfaces.
+ */
+
+var io = require('socket.io');
+server.listen(port);
+var io = io.listen(server);
+server.on('error', onError);
+
+var login = require('facebook-chat-api');
+var a;
+var thread;
+  
+io.on('connection', function(socket){
+  console.log('connection made!');
+  login({email: "stanmaeyens@hotmail.com", password: "cerclekampioen1"}, function callback (err, api) {
+    if(err) return console.error(err);
+
+    api.searchForThread('Smooth skidinkkamp/s.t.n', function callback (err, obj) {
+      thread = obj[0].threadID;
+      console.log('found: ' + obj[0].name + ", " + obj[0].threadID);
+      a = api;
+      api.getThreadHistory(thread, 0, 100000, null, function callback (err, history){
+        count(history);
+      });  
+    });
+  });
+
+  socket.on('refresh', function(){
+    a.getThreadHistory(thread, 0, 100000, null, function callback (err, history){
+      count(history);
+    });
+  });
+});
+
+function count(history){
+  console.log('history');
+    //console.log(history);
+    var counter = 0;
+    var counterpp = [];
+    var wordspp = [];
+    var counterpd = [];
+    var counterpw = [];
+    for(var i=0; i<history.length; i++){
+      counter++;
+      if(counterpp[history[i].senderName]){
+        counterpp[history[i].senderName]++;
+      }
+      else{
+        counterpp[history[i].senderName] = 1;
+      }
+      if(wordspp[history[i].senderName]){
+        if(history[i].type === 'message' && history[i].body){
+          var message = history[i].body;
+          var words = message.split(" ");
+          wordspp[history[i].senderName] += words.length;
+        }
+      }
+      else{
+        if(history[i].type === 'message' && history[i].body){
+          var message = history[i].body;
+          var words = message.split(" ");
+          wordspp[history[i].senderName] = words.length;
+        }
+      }
+      if(counterpd[history[i].timestampAbsolute]){
+        counterpd[history[i].timestampAbsolute]++;
+      }
+      else{
+        counterpd[history[i].timestampAbsolute] = 1;
+      }
+      //console.log("sender: " + history[i].senderName + ", message: " + history[i].body);
+    }
+
+    console.log("aantal berichten = " + counter);
+    console.log("per persoon (# woorden; #woorden/bericht): ");
+    var names = [];
+    var countspp = [];
+    for(var p in counterpp){
+      console.log(p + ": " + counterpp[p] + " (" + wordspp[p] + "; " + Math.round( wordspp[p]/counterpp[p] * 100) / 100 + ")");
+      names.push(p);
+      countspp.push(counterpp[p]);
+    }
+    var days = [];
+    var countspd = [];
+    console.log("\nper dag: ");
+    for(var d in counterpd){
+      console.log(d + ": " + counterpd[d]);
+      days.push(d);
+      countspd.push(counterpd[d]);
+    }
+    var data = {
+      labels: names,
+      datasets: [
+          {
+            label: "My Second dataset",
+            fillColor: "rgba(151,187,205,0.5)",
+            strokeColor: "rgba(151,187,205,0.8)",
+            highlightFill: "rgba(151,187,205,0.75)",
+            highlightStroke: "rgba(151,187,205,1)",
+            data: countspp
+          }
+      ]
+    };
+    io.emit('pp', data);
+    var data2 = {
+      labels: days,
+      datasets: [
+          {
+            fillColor: "rgba(151,187,205,0.2)",
+            strokeColor: "rgba(151,187,205,1)",
+            pointColor: "rgba(151,187,205,1)",
+            pointStrokeColor: "#fff",
+            pointHighlightFill: "#fff",
+            pointHighlightStroke: "rgba(151,187,205,1)",
+            data: countspd
+          }
+      ]
+    };
+    io.emit('pd', data2);
+}
+
+/**
+ * Normalize a port into a number, string, or false.
+ */
+
+function normalizePort(val) {
+  var port = parseInt(val, 10);
+
+  if (isNaN(port)) {
+    // named pipe
+    return val;
+  }
+
+  if (port >= 0) {
+    // port number
+    return port;
+  }
+
+  return false;
+}
+
+/**
+ * Event listener for HTTP server "error" event.
+ */
+
+function onError(error) {
+  if (error.syscall !== 'listen') {
+    throw error;
+  }
+
+  var bind = typeof port === 'string'
+    ? 'Pipe ' + port
+    : 'Port ' + port;
+
+  // handle specific listen errors with friendly messages
+  switch (error.code) {
+    case 'EACCES':
+      console.error(bind + ' requires elevated privileges');
+      process.exit(1);
+      break;
+    case 'EADDRINUSE':
+      console.error(bind + ' is already in use');
+      process.exit(1);
+      break;
+    default:
+      throw error;
+  }
+}
+
+/**
+ * Event listener for HTTP server "listening" event.
+ */
+
+function onListening() {
+  var addr = server.address();
+  var bind = typeof addr === 'string'
+    ? 'pipe ' + addr
+    : 'port ' + addr.port;
+  debug('Listening on ' + bind);
+}

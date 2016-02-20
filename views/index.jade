@@ -1,0 +1,12 @@
+extends layout
+
+block content
+	script(src='/javascripts/index.js')
+	h1= title
+	input(class="btn btn-default" type="button" value="Refresh" id="refresh")
+	p Number of messages per person
+	div
+		canvas(id="myChart" width="1000" height="400")
+	p Number of messages per day
+	div
+		canvas(id="myChart2" width="1000" height="400")
